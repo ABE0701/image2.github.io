@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>パプリカクイズ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0fdf4; /* 淡い緑の背景色 */
+        }
+        .loader {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 2s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .option-button {
+            @apply w-full py-3 px-6 mb-3 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75 transition duration-300 ease-in-out;
+        }
+        .option-button.correct {
+            @apply bg-green-700;
+        }
+        .option-button.wrong {
+            @apply bg-red-500;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-4xl">
+        <h1 class="text-4xl font-extrabold text-green-800 text-center mb-6">
+            <span class="block">パプリカクイズ</span>
+            <span class="block text-xl font-medium mt-2">写真から固有名詞を当てよう！</span>
+        </h1>
+
+        <div class="flex flex-col items-center justify-center mb-8">
+            <div id="image-container" class="w-full h-auto flex items-center justify-center min-h-[300px] mb-6">
+                <div class="loader" id="image-loader"></div>
+            </div>
+            
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">
+                この写真に関連する固有名詞は何でしょう？
+            </h2>
+
+            <div id="options-container" class="w-full max-w-md">
+                <button class="option-button" data-answer="paprika">パプリカ</button>
+                <button class="option-button" data-answer="marutane_paprika">マルタネパプリカ</button>
+                <button class="option-button" data-answer="vegetable">野菜</button>
+                <button class="option-button" data-answer="fruit">果物</button>
+            </div>
+
+            <div id="feedback" class="mt-6 text-lg font-semibold text-center"></div>
+
+            <button id="reset-button" class="mt-8 py-3 px-8 bg-gray-300 text-gray-800 font-semibold rounded-lg shadow-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-opacity-75 transition duration-300 ease-in-out hidden">
+                もう一度プレイする
+            </button>
+        </div>
+
+        <div class="text-center text-gray-600 text-base leading-relaxed">
+            <p class="mb-4">
+                パプリカは、ビタミンCやβカロテンが豊富で、健康的な食生活に欠かせない野菜です。
+                生でサラダに、炒め物や煮込み料理にと、様々な調理法で楽しめます。
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // 画像生成および表示関数
+        async function generateAndDisplayImage() {
+            const imageContainer = document.getElementById('image-container');
+            const imageLoader = document.getElementById('image-loader');
+
+            imageContainer.innerHTML = ''; // 以前のコンテンツをクリア
+            imageContainer.appendChild(imageLoader); // ローダーを表示
+
+            try {
+                const payload = { instances: { prompt: "a pile of red and yellow bell peppers, high quality, studio lighting" }, parameters: { "sampleCount": 1} };
+                const apiKey = ""; // If you want to use models other than imagen-3.0-generate-002, provide an API key here. Otherwise, leave this as-is.
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+
+                if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
+                    const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+                    const imgElement = document.createElement('img');
+                    imgElement.src = imageUrl;
+                    imgElement.alt = "生成されたパプリカの画像";
+                    imgElement.className = "rounded-xl shadow-md max-w-full h-auto";
+                    imageContainer.innerHTML = ''; // ローダーを削除
+                    imageContainer.appendChild(imgElement);
+                } else {
+                    imageContainer.innerHTML = '<p class="text-red-500">画像の生成に失敗しました。</p>';
+                    console.error("画像の生成に失敗しました:", result);
+                }
+            } catch (error) {
+                imageContainer.innerHTML = '<p class="text-red-500">エラーが発生しました。もう一度お試しください。</p>';
+                console.error("画像生成エラー:", error);
+            }
+        }
+
+        // クイズのロジック
+        const optionsContainer = document.getElementById('options-container');
+        const feedbackElement = document.getElementById('feedback');
+        const resetButton = document.getElementById('reset-button');
+        let quizCompleted = false;
+
+        optionsContainer.addEventListener('click', (event) => {
+            if (event.target.classList.contains('option-button') && !quizCompleted) {
+                const selectedAnswer = event.target.dataset.answer;
+                const correctAnswer = 'marutane_paprika'; // 正しい固有名詞
+
+                // 全てのボタンを無効化
+                Array.from(optionsContainer.children).forEach(button => {
+                    button.disabled = true;
+                });
+
+                if (selectedAnswer === correctAnswer) {
+                    feedbackElement.textContent = '正解です！よくできました！';
+                    feedbackElement.classList.remove('text-red-500');
+                    feedbackElement.classList.add('text-green-700');
+                    event.target.classList.add('correct');
+                } else {
+                    feedbackElement.textContent = '残念、不正解です。正解は「マルタネパプリカ」でした。';
+                    feedbackElement.classList.remove('text-green-700');
+                    feedbackElement.classList.add('text-red-500');
+                    event.target.classList.add('wrong');
+                    // 正解のボタンをハイライト
+                    Array.from(optionsContainer.children).find(button => button.dataset.answer === correctAnswer).classList.add('correct');
+                }
+                quizCompleted = true;
+                resetButton.classList.remove('hidden'); // リセットボタンを表示
+            }
+        });
+
+        resetButton.addEventListener('click', () => {
+            // ボタンの状態をリセット
+            Array.from(optionsContainer.children).forEach(button => {
+                button.disabled = false;
+                button.classList.remove('correct', 'wrong');
+            });
+            feedbackElement.textContent = ''; // フィードバックをクリア
+            resetButton.classList.add('hidden'); // リセットボタンを非表示
+            quizCompleted = false;
+            generateAndDisplayImage(); // 新しい画像を生成して表示
+        });
+
+        // ページ読み込み時に画像を生成して表示
+        window.onload = generateAndDisplayImage;
+    </script>
+</body>
+</html>
